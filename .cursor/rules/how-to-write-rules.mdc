@@ -1,0 +1,21 @@
+---
+description: How to write LLM rules
+globs:
+alwaysApply: true
+---
+
+Rule files have to be of `mdc` format with the following preamble:
+```
+---
+description: 
+globs:
+alwaysApply: true
+---
+```
+
+Where:
+- `description` is a short informative summary of when this rule is applicable
+- `glob` comma separated globs for when the rule should be auto attached into the context given that an LLM is operating on a file that matches the glob
+- `alwaysApply` if this is true, globs are disregarded and the rule is automatically added to the LLMs context
+
+The content of the rule is a source of truth for an LLM. Do not put conversation points in the rule files.

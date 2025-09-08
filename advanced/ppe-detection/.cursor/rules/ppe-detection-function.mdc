@@ -1,0 +1,18 @@
+---
+description: What is the PPE detection function
+alwaysApply: false
+---
+
+This directory contains code for a Samsara Function for Personal Protective Equipment detection.
+
+It is run in response to an alert, triggered on a vehicle with a camera. The alert payload provides the vehicle id.
+ 
+Whenever triggered by an alert, the Function should request a media retrieval for images of both front and back camera and keep track of it in the storage.
+
+Whenever triggered on schedule, it should also poll for completed media retrievals and download the images to storage if they are ready. 
+
+On each downloaded image without a metadata file alongside of it, it should request OpenAI to verify if there are any humans not wearing PPE in the image. Store the result of the verification in a metadata json file next to the image.
+
+If OpenAI has detected any of the humans not to have PPE, it should trigger an email notification via MailGun. If the notification was triggered, it should update the metadata file with when it was sent.
+
+API key for MailGun is stored in secret `MAILGUN_KEY`, for OpenAI in `OPENAI_KEY`, for Samsara in `SAMSARA_KEY`. Use the additional dependencies `samsara-fn` template for installing the MailGun, OpenAI and Samsara SDKs.
