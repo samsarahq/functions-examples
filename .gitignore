@@ -1,0 +1,8 @@
+**/.venv
+**/venv
+**/.envrc
+**/.samsara-functions
+**/lib
+**/__pycache__
+**/*secret*
+!**/samsarafnsecrets.py

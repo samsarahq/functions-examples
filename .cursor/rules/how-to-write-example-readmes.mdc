@@ -1,0 +1,83 @@
+---
+description: Guidelines for writing README files for Samsara Function examples
+globs: 
+alwaysApply: true
+---
+
+## Purpose
+Define a consistent, concise README format for all example Functions so future LLM edits produce uniform, accurate documentation without guesswork.
+
+## Required Sections (in order)
+1. Top heading: `# <example-folder-name>`
+2. Handler table:
+   - One column: `Handler`
+   - Exactly one data row containing the entrypoint in `module.function` form
+3. Horizontal rule: `---`
+4. Short description (2–4 sentences):
+   - What the Function does
+   - When it runs (alert vs schedule)
+   - What it outputs (e.g., notification, storage writes, logs)
+5. “### Event Parameters” section:
+   - If none: single line “This function does not require any event parameters.”
+   - Else: a 3‑column table with headers: `Parameter Name | Description | Required`
+   - For Required column use one of: `Yes`, `No`, `For <run type>`
+6. “### Secrets” section:
+   - If none: single line “This function does not require any secrets.”
+   - Else: a 2‑column table with headers: `Secret Name | Description`
+7. Optional “### Disclaimer” section:
+   - Include only when the example requires pre‑bundle steps (e.g., vendoring deps)
+   - Example command block:
+     ```python
+     python run-before-bundle/install_deps_to_lib.py prod
+     ```
+
+## How to determine values
+- Handler:
+  - Locate the file that defines `def main(event, context)` (or `def main(event, _)`).
+  - The handler is `<python-module>.<function-name>` using the file’s module path within the example folder, e.g.:
+    - `entrypoint.main`
+    - `function.main`
+    - `package/submodule.main` if applicable
+- Event Parameters:
+  - Inspect reads from the `event` object (e.g., `event["SamsaraFunctionTriggerSource"]`, `assetId`, `alertIncidentTime`, `ToEmail`, `IsEuRegion`).
+  - Note which parameters are only used for alert or schedule paths.
+- Secrets:
+  - Inspect code that loads secrets (e.g., `samsara.Function().secrets().load()`, `get_secrets()`), and list the exact keys (e.g., `SAMSARA_API_TOKEN`, `SAMSARA_KEY`, `OPENAI_KEY`, `MAILGUN_KEY`, `NOTIFY_WEBHOOK`).
+  - Use exact key names from code; do not invent or rename.
+
+## Formatting rules
+- Use a top‑level `#` heading with the example folder name (kebab‑case preserved).
+- Keep tables minimal and consistently aligned as in other examples.
+- Use `###` for section headings.
+- Keep descriptions succinct (avoid implementation detail beyond what’s needed to understand purpose and I/O).
+- Preserve existing file style and spacing; do not reflow unrelated content.
+
+## Example skeleton
+```
+# example-name
+
+| Handler       |
+| ------------- |
+| function.main |
+
+---
+
+Brief 2–4 sentence description of what the Function does, when it runs, and what it outputs.
+
+### Event Parameters
+
+| Parameter Name               | Description                             | Required   |
+| ---------------------------- | --------------------------------------- | ---------- |
+| SamsaraFunctionTriggerSource | Trigger source: "alert" or "schedule"   | Yes        |
+| ...                          | ...                                     | ...        |
+
+### Secrets
+
+| Secret Name     | Description                         |
+| --------------- | ----------------------------------- |
+| SAMSARA_API_KEY | Samsara API key used for ...        |
+| ...             | ...                                 |
+
+### Disclaimer
+
+Additional things you need to do to make it work...
