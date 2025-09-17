@@ -21,3 +21,11 @@ As a form of filesystem cache, there is a directory that can be written to, with
 For example, if you have a Function named `my-func` that uses temporary storage, when testing locally with the simulator, any files written to the temporary directory can be inspected after execution in `.samsara-functions/functions/my-func/temp`. This directory is automatically cleared before each Function invocation.
 
 It can be useful in scenarios where e.g. a library uses file paths instead of accepting bytes as parameters.
+
+### Event Parameters
+
+This function does not require any event parameters.
+
+### Secrets
+
+This function does not require any secrets.
