@@ -41,3 +41,11 @@ python run-before-bundle/install_deps_to_lib.py prod
 ```
 
 Then bundle, and use the output zip file in the Samsara dashboard instead of the locally working one.
+
+### Event Parameters
+
+This function does not require any event parameters.
+
+### Secrets
+
+This function does not require any secrets.

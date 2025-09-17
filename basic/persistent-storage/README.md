@@ -13,3 +13,11 @@ If you need to store files/data that are:
 - are needed in subsequent runs of the same Function
 
 use this template.
+
+### Event Parameters
+
+This function does not require any event parameters.
+
+### Secrets
+
+This function does not require any secrets.
