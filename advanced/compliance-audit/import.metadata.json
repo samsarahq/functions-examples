@@ -1,0 +1,8 @@
+{
+  "$schema": "https://raw.githubusercontent.com/samsarahq/functions-examples/main/.schema/importMetadata.schema.json",
+  "name": "compliance-audit",
+  "description": "Audit fleet safety settings against expected targets and trigger a webhook alert if non-compliant.",
+  "secretsKeys": ["SAMSARA_API_TOKEN", "NOTIFY_WEBHOOK"],
+  "handler": "compliance_audit.main"
+}
+

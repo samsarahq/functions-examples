@@ -16,7 +16,7 @@ Common fields and how to derive them (include only when applicable)
 - `name`: Use the example folder name; ensure 3–35 chars and matches `^[a-zA-Z0-9_-]+$`
 - `description`: Use the first paragraph in README after the horizontal rule, trimmed. If unavailable, a succinct one-liner summarizing the example based on code
 - `activitySchemaInput`: Include only if README or code defines a concrete activity schema object; otherwise omit
-- `eventParameters`: If README lists parameters, create keys from the README table’s Parameter Name column with string values (empty values allowed). If none, omit the property
+- `eventParameters`: If README lists parameters, create keys from the README table’s Parameter Name column with string values (empty values allowed). If none, omit the property. Predefined SamsaraFunctionTriggerSource and SamsaraFunctionCorrelationId should always be omitted.
 - `secretsKeys`: Include only if code or README lists exact keys. For template examples where it aids understanding, you may include exemplary keys (e.g., `EXAMPLE_SECRET`). Otherwise, omit
 - `isSchedulingEnabled`: Include only if README or code clearly indicates scheduled operation; otherwise omit
 - `schedule`: Include only when scheduling is used; ensure `entries` is an array (min 1)

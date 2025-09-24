@@ -1,0 +1,7 @@
+{
+  "$schema": "https://raw.githubusercontent.com/samsarahq/functions-examples/main/.schema/importMetadata.schema.json",
+  "name": "persistent-storage",
+  "description": "Use shared persistent storage and a lightweight key/value database across runs.",
+  "handler": "function.main"
+}
+

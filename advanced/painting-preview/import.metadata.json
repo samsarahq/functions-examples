@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/samsarahq/functions-examples/main/.schema/importMetadata.schema.json",
+  "name": "painting-preview",
+  "description": "Generate painting mockups from dashcam images on alerts and on schedule using OpenAI.",
+  "eventParameters": {
+    "assetId": "",
+    "alertIncidentTime": "",
+    "IsEuRegion": ""
+  },
+  "secretsKeys": ["SAMSARA_API_KEY", "OPENAI_API_KEY"],
+  "handler": "entrypoint.main"
+}
+

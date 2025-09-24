@@ -1,0 +1,7 @@
+{
+  "$schema": "https://raw.githubusercontent.com/samsarahq/functions-examples/main/.schema/importMetadata.schema.json",
+  "name": "additional-python-dependencies",
+  "description": "Demonstrates vendoring extra Python dependencies into the bundle and using them.",
+  "handler": "function.main"
+}
+
