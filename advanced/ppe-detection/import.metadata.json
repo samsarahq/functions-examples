@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/samsarahq/functions-examples/main/.schema/importMetadata.schema.json",
+  "name": "ppe-detection",
+  "description": "Detect missing PPE in dashcam images using OpenAI; queue on alerts, analyze on schedule, and email reports.",
+  "eventParameters": {
+    "assetId": "",
+    "alertIncidentTime": "",
+    "ToEmail": ""
+  },
+  "secretsKeys": ["SAMSARA_KEY", "OPENAI_KEY", "MAILGUN_KEY"],
+  "handler": "function.main"
+}
+

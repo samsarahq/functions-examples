@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/samsarahq/functions-examples/main/.schema/importMetadata.schema.json",
+  "name": "correlation-logging",
+  "description": "Structured, correlation-aware logging with optional JSON output and custom levels.",
+  "eventParameters": {
+    "SamsaraFunctionLoggerIsJsonOut": "False",
+    "SamsaraFunctionLoggerLevel": "INFO"
+  },
+  "handler": "function.main"
+}
+

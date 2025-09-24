@@ -1,0 +1,8 @@
+{
+  "$schema": "https://raw.githubusercontent.com/samsarahq/functions-examples/main/.schema/importMetadata.schema.json",
+  "name": "idling-clustering",
+  "description": "Cluster idling events by proximity over recent hours and report top hotspots via webhook.",
+  "secretsKeys": ["SAMSARA_API_TOKEN", "NOTIFY_WEBHOOK"],
+  "handler": "idling_clustering.main"
+}
+
