@@ -1,0 +1,48 @@
+---
+alwaysApply: true
+---
+Goal
+Create a file named `import.metadata.json` inside each example folder that conforms to `.schemas/importMetadata.schema.json`.
+
+Inputs
+- Example folder contents: README and source code
+- Schema file (public): `https://raw.githubusercontent.com/samsarahq/functions-examples/main/.schema/importMetadata.schema.json`
+
+Output
+- Minimal `import.metadata.json` at the example root containing only fields that add signal for that example (omit unused/empty fields), while complying with the schema
+
+Common fields and how to derive them (include only when applicable)
+- `$schema`: Set to the public URL `https://raw.githubusercontent.com/samsarahq/functions-examples/main/.schema/importMetadata.schema.json` so schema validation works when copied to other repos
+- `name`: Use the example folder name; ensure 3–35 chars and matches `^[a-zA-Z0-9_-]+$`
+- `description`: Use the first paragraph in README after the horizontal rule, trimmed. If unavailable, a succinct one-liner summarizing the example based on code
+- `activitySchemaInput`: Include only if README or code defines a concrete activity schema object; otherwise omit
+- `eventParameters`: If README lists parameters, create keys from the README table’s Parameter Name column with string values (empty values allowed). If none, omit the property
+- `secretsKeys`: Include only if code or README lists exact keys. For template examples where it aids understanding, you may include exemplary keys (e.g., `EXAMPLE_SECRET`). Otherwise, omit
+- `isSchedulingEnabled`: Include only if README or code clearly indicates scheduled operation; otherwise omit
+- `schedule`: Include only when scheduling is used; ensure `entries` is an array (min 1)
+- `handler`: Determine from README handler table. If absent, inspect code for Python `def main(event, context)` or TypeScript/JS `export const handler` and construct the handler string accordingly. Enforce AWS Lambda `module.export` style, e.g., `function.main` or `entrypoint.main`
+
+Validation rules to respect (from schema)
+- All fields are optional
+- `name` regex and length limits
+- `eventParameters` allows empty map and empty values but disallows empty keys
+- `secretsKeys` items must be unique and non-empty
+- `schedule.entries` must exist if `schedule` is present; each item must include:
+  - `timeSinceMidnightMs` integer between 0 and 86,399,999
+  - `daysOfWeek` exactly 7 booleans with at least one `true`
+- `handler` must match AWS Lambda `module.export` pattern
+
+Procedure
+1) Read the README to find the handler table and description text
+2) Parse event parameters if present; otherwise omit the property
+3) Inspect code for secrets usage and explicit keys; otherwise omit the property
+4) Detect scheduling hints (e.g., cron/schedule mention); if not scheduled, omit both `isSchedulingEnabled` and `schedule`
+5) If scheduling applies, add `schedule` with at least one valid entry and include `isSchedulingEnabled: true` if used by the example
+6) Assemble a minimal JSON object and validate mentally against the schema; write with two-space indentation and keys in the order shown above
+
+Notes
+- Prefer minimalism: omit unneeded fields and avoid placeholder defaults (e.g., empty objects/arrays)
+- Include exemplary keys only when it improves clarity for template examples and aligns with README/code (e.g., `EXAMPLE_SECRET` in a secrets-focused example)
+- Do not invent secrets or parameters across non-template examples—only include what is explicitly documented or programmatically required
+- Keep descriptions succinct (1–3 sentences)
+- Preserve existing repository indentation style for JSON files
