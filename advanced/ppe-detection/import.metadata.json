@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/samsarahq/functions-examples/main/.schema/importMetadata.schema.json",
+  "$schema": "https://raw.githubusercontent.com/samsarahq/functions-examples/refs/heads/main/.schemas/importMetadata.schema.json",
   "name": "ppe-detection",
   "description": "Detect missing PPE in dashcam images using OpenAI; queue on alerts, analyze on schedule, and email reports.",
   "eventParameters": {

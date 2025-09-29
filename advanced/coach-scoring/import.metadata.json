@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/samsarahq/functions-examples/main/.schema/importMetadata.schema.json",
+  "$schema": "https://raw.githubusercontent.com/samsarahq/functions-examples/refs/heads/main/.schemas/importMetadata.schema.json",
   "name": "coach-scoring",
   "description": "Analyze driver safety score changes and compute coach performance scores, sending a summary via webhook.",
   "secretsKeys": ["SAMSARA_API_TOKEN", "NOTIFY_WEBHOOK"],
