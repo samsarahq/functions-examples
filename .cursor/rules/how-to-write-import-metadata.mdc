@@ -6,13 +6,13 @@ Create a file named `import.metadata.json` inside each example folder that confo
 
 Inputs
 - Example folder contents: README and source code
-- Schema file (public): `https://raw.githubusercontent.com/samsarahq/functions-examples/main/.schema/importMetadata.schema.json`
+- Schema file (public): `https://raw.githubusercontent.com/samsarahq/functions-examples/refs/heads/main/.schemas/importMetadata.schema.json`
 
 Output
 - Minimal `import.metadata.json` at the example root containing only fields that add signal for that example (omit unused/empty fields), while complying with the schema
 
 Common fields and how to derive them (include only when applicable)
-- `$schema`: Set to the public URL `https://raw.githubusercontent.com/samsarahq/functions-examples/main/.schema/importMetadata.schema.json` so schema validation works when copied to other repos
+- `$schema`: Set to the public URL `https://raw.githubusercontent.com/samsarahq/functions-examples/refs/heads/main/.schemas/importMetadata.schema.json` so schema validation works when copied to other repos
 - `name`: Use the example folder name; ensure 3–35 chars and matches `^[a-zA-Z0-9_-]+$`
 - `description`: Use the first paragraph in README after the horizontal rule, trimmed. If unavailable, a succinct one-liner summarizing the example based on code
 - `activitySchemaInput`: Include only if README or code defines a concrete activity schema object; otherwise omit

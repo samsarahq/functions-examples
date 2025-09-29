@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/samsarahq/functions-examples/main/.schema/importMetadata.schema.json",
+  "$schema": "https://raw.githubusercontent.com/samsarahq/functions-examples/refs/heads/main/.schemas/importMetadata.schema.json",
   "name": "just-secrets",
   "description": "Demonstrates retrieving configured secrets at runtime and logging the count.",
   "secretsKeys": ["EXAMPLE_SECRET"],

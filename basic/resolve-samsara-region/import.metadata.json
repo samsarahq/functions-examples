@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/samsarahq/functions-examples/main/.schema/importMetadata.schema.json",
+  "$schema": "https://raw.githubusercontent.com/samsarahq/functions-examples/refs/heads/main/.schemas/importMetadata.schema.json",
   "name": "resolve-samsara-region",
   "description": "Resolve Samsara API region from AWS region and print derived values.",
   "handler": "function.main"
