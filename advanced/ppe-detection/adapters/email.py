@@ -13,7 +13,7 @@ class Variables:
     NotificationTitle: str = ""
 
 
-def send_email(
+def send(
     to_email: str,
     subject: str,
     attachments: list[tuple[str, bytes]],

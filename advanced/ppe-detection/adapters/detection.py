@@ -1,6 +1,5 @@
-import openai
 import json
-import httpx
+import requests
 import urllib3
 from dataclasses import dataclass
 from samsarafnsecrets import get_secrets
@@ -8,12 +7,8 @@ from samsarafnsecrets import get_secrets
 # Disable SSL warnings when using verify=False
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Create HTTP client with disabled SSL verification
-http_client = httpx.Client(verify=False)
-
-client = openai.OpenAI(
-    api_key=get_secrets(force_refresh=True)["OPENAI_KEY"], http_client=http_client
-)
+OPENAI_API_KEY = get_secrets(force_refresh=True)["OPENAI_KEY"]
+OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 
 
 prompt = """
@@ -60,14 +55,14 @@ class DetectionResult:
 fallback_result: DetectionResult = DetectionResult(
     has_detected_people=False,
     is_any_ppe_missing=False,
-    summary="",
+    summary="Could not do the detection because of an error",
 )
 
 
 def detect_missing_ppe(image_base64: str) -> DetectionResult:
-    response = client.chat.completions.create(
-        model="o4-mini",
-        messages=[
+    payload = {
+        "model": "o4-mini",
+        "messages": [
             {
                 "role": "user",
                 "content": [
@@ -82,10 +77,23 @@ def detect_missing_ppe(image_base64: str) -> DetectionResult:
                 ],
             }
         ],
-        max_completion_tokens=10_000,
-    )
+        "max_tokens": 10_000,
+    }
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
 
-    result_text = response.choices[0].message.content
+    try:
+        response = requests.post(
+            OPENAI_API_URL, headers=headers, json=payload, verify=False, timeout=60
+        )
+        response.raise_for_status()
+        data = response.json()
+        result_text = data["choices"][0]["message"]["content"]
+    except Exception as e:
+        print(f"Failed to call OpenAI: {e}, using fallback")
+        return fallback_result
 
     try:
         # Find JSON in the response (it might be wrapped in markdown code blocks)

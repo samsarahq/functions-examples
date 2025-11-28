@@ -115,7 +115,7 @@ def notify_about_offenders(to_email: str):
 
         attachments = [(f"{retrieval_id}.jpg", storage.get_body(result.image_key))]
 
-        adapters.email.send_email(
+        adapters.email.send(
             to_email,
             "Personnel without Protective Equipment was detected",
             attachments,
