@@ -6,22 +6,33 @@ from geopy import distance
 import time
 import json
 
-SAMSARA_IDLING_API_URL = "https://api.samsara.com/fleet/reports/vehicle/idling?limit=512"
+SAMSARA_IDLING_API_URL = (
+    "https://api.samsara.com/fleet/reports/vehicle/idling?limit=512"
+)
 NUM_HOURS_HISTORY = 8
 CLUSTER_DISTANCE_THRESHOLD_MILES = 2
 MAX_CLUSTERS = 1000
 
+
 def idling_time_buckets():
     timestamps = []
 
-    range_start = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=NUM_HOURS_HISTORY)
+    range_start = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
+        hours=NUM_HOURS_HISTORY
+    )
 
     for hour in range(NUM_HOURS_HISTORY):
         current_hours_start = range_start + datetime.timedelta(hours=hour)
         current_hours_end = current_hours_start + datetime.timedelta(hours=1)
-        timestamps.append((current_hours_start.isoformat(), current_hours_end.isoformat(),))
+        timestamps.append(
+            (
+                current_hours_start.isoformat(),
+                current_hours_end.isoformat(),
+            )
+        )
 
     return timestamps
+
 
 def idling_url_with_time_range(start_timestamp, end_timestamp, cursor=None):
     escaped_start_timestamp = quote(start_timestamp)
@@ -35,6 +46,7 @@ def idling_url_with_time_range(start_timestamp, end_timestamp, cursor=None):
 
     return f"{url_root}&startTime={escaped_start_timestamp}&endTime={escaped_end_timestamp}"
 
+
 def cursor_from_response_data(idling_reports):
     if "pagination" in idling_reports:
         if "endCursor" in idling_reports["pagination"]:
@@ -42,6 +54,7 @@ def cursor_from_response_data(idling_reports):
                 if idling_reports["pagination"]["hasNextPage"]:
                     return idling_reports["pagination"]["endCursor"]
     return None
+
 
 def idling_by_vehicle(idling_reports):
     idling_by_vehicle = {}
@@ -52,12 +65,21 @@ def idling_by_vehicle(idling_reports):
 
         if vehicle_name not in idling_by_vehicle:
             idling_by_vehicle[vehicle_name] = [
-                (vehicle_lat, vehicle_lon,),
+                (
+                    vehicle_lat,
+                    vehicle_lon,
+                ),
             ]
         else:
-            idling_by_vehicle[vehicle_name].append((vehicle_lat, vehicle_lon,))
+            idling_by_vehicle[vehicle_name].append(
+                (
+                    vehicle_lat,
+                    vehicle_lon,
+                )
+            )
 
     return idling_by_vehicle
+
 
 def idling_clusters(idling_by_vehicle):
     potential_clusters = {}
@@ -80,7 +102,9 @@ def idling_clusters(idling_by_vehicle):
 
     total_clusters = len(potential_clusters)
     if total_clusters > MAX_CLUSTERS:
-        print(f"Found {len(potential_clusters)} potential clusters, truncating to {MAX_CLUSTERS}")
+        print(
+            f"Found {len(potential_clusters)} potential clusters, truncating to {MAX_CLUSTERS}"
+        )
         potential_clusters = dict(list(potential_clusters.items())[:MAX_CLUSTERS])
         total_clusters = MAX_CLUSTERS
 
@@ -90,7 +114,10 @@ def idling_clusters(idling_by_vehicle):
         try:
             next_cluster_vehicle_location_histograms = vehicle_to_event_count
             other_index = 0
-            for other_idle_location, other_vehicle_to_event_count in potential_clusters.items():
+            for (
+                other_idle_location,
+                other_vehicle_to_event_count,
+            ) in potential_clusters.items():
                 try:
                     if other_index == starting_index:
                         continue
@@ -98,21 +125,41 @@ def idling_clusters(idling_by_vehicle):
                     if other_idle_location in locations_in_cluster:
                         continue
 
-                    if distance.distance(idle_location, other_idle_location).miles <= CLUSTER_DISTANCE_THRESHOLD_MILES:
-                        print(f"Locations in range: {idle_location} and {other_idle_location}")
+                    if (
+                        distance.distance(idle_location, other_idle_location).miles
+                        <= CLUSTER_DISTANCE_THRESHOLD_MILES
+                    ):
+                        print(
+                            f"Locations in range: {idle_location} and {other_idle_location}"
+                        )
 
-                        for vehicle_name, event_count in other_vehicle_to_event_count.items():
-                            if vehicle_name not in next_cluster_vehicle_location_histograms:
-                                next_cluster_vehicle_location_histograms[vehicle_name] = 0
-                            
-                            next_cluster_vehicle_location_histograms[vehicle_name] += event_count
+                        for (
+                            vehicle_name,
+                            event_count,
+                        ) in other_vehicle_to_event_count.items():
+                            if (
+                                vehicle_name
+                                not in next_cluster_vehicle_location_histograms
+                            ):
+                                next_cluster_vehicle_location_histograms[
+                                    vehicle_name
+                                ] = 0
+
+                            next_cluster_vehicle_location_histograms[vehicle_name] += (
+                                event_count
+                            )
 
                         locations_in_cluster.add(idle_location)
                         locations_in_cluster.add(other_idle_location)
                 finally:
                     other_index += 1
             if len(next_cluster_vehicle_location_histograms) > 0:
-                clusters.append({"location": idle_location, "vehicles": next_cluster_vehicle_location_histograms})
+                clusters.append(
+                    {
+                        "location": idle_location,
+                        "vehicles": next_cluster_vehicle_location_histograms,
+                    }
+                )
         finally:
             starting_index += 1
 
@@ -124,13 +171,14 @@ def idling_clusters(idling_by_vehicle):
 
     return [cluster for cluster in clusters if sum(cluster["vehicles"].values()) >= 1]
 
+
 def main(event, context):
     function = samsara.Function()
     secrets = function.secrets().load()
 
     SAMSARA_API_HEADERS = {
         "accept": "application/json",
-        "authorization": f"Bearer {secrets["SAMSARA_API_TOKEN"]}"
+        "authorization": f"Bearer {secrets['SAMSARA_API_TOKEN']}",
     }
 
     NOTIFY_WEBHOOK = secrets["NOTIFY_WEBHOOK"]
@@ -143,16 +191,18 @@ def main(event, context):
         cursor = None
 
         while True:
-            response = requests.get(idling_url_with_time_range(bucket[0], bucket[1], cursor), 
-                                    headers=SAMSARA_API_HEADERS)
-            
+            response = requests.get(
+                idling_url_with_time_range(bucket[0], bucket[1], cursor),
+                headers=SAMSARA_API_HEADERS,
+            )
+
             if response.status_code != 200:
                 print(f"Error: {response.status_code} {response.text}")
                 break
 
             # Rate limit requests to 10/sec, well within the API limit of 25/sec
             time.sleep(0.1)
-            
+
             response_data = json.loads(response.text)
             if "data" in response_data:
                 idling_reports.extend(response_data["data"])
@@ -164,7 +214,9 @@ def main(event, context):
 
     print(f"Found {len(idling_reports)} idling report(s)")
     for report in idling_reports:
-        print(f"{report["vehicle"]["name"]} ({report["address"]["latitude"]}, {report["address"]["longitude"]})")
+        print(
+            f"{report['vehicle']['name']} ({report['address']['latitude']}, {report['address']['longitude']})"
+        )
 
     idle_events = idling_by_vehicle(idling_reports)
     print(idle_events)
