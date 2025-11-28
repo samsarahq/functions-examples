@@ -93,4 +93,3 @@ class Function:
             The configured Secrets instance
         """
         return self.__secrets
-
