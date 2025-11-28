@@ -5,6 +5,8 @@
 **/lib
 **/__pycache__
 **/*secret*
+**/*.zip
+**/.tmp
 
 !**/just-secrets
 !**/samsarafnsecrets.py
