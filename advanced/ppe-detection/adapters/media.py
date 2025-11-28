@@ -17,7 +17,7 @@ def start_road_facing_image_retrieval(
 ):
     """Starts a road-facing image retrieval for the given vehicle and moment."""
     try:
-        return client.cameras.media.retrieval.create(
+        return client.media.post_media_retrieval(
             vehicle_id=vehicle_id,
             start_time=moment.isoformat(),
             end_time=moment.isoformat(),
@@ -34,7 +34,7 @@ def start_road_facing_image_retrieval(
 
 def get_available_retrieval_image(retrieval_id: str):
     """Returns the bytes of the available road-facing image retrieval, or None if image is not available."""
-    response = client.cameras.media.retrieval.get(retrieval_id=retrieval_id)
+    response = client.media.get_media_retrieval(retrieval_id=retrieval_id)
 
     url = None
 
