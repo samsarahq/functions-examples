@@ -22,6 +22,7 @@ def main(event, _):
         )
 
         request_image_retrieval(vehicle_id, alert_occured_at)
+        return
 
     if trigger_source == "schedule":
         to_email = event["ToEmail"]
@@ -29,6 +30,9 @@ def main(event, _):
         download_images()
         analyze_images()
         notify_about_offenders(to_email)
+        return
+    
+    print(f"Trigger source {trigger_source} is not supported in this Function, skipping execution")
 
 
 db_retrievals = get_database("ppe/retrievals")
@@ -51,6 +55,8 @@ def request_image_retrieval(vehicle_id: str, moment: datetime):
             "requested_at": datetime.now(timezone.utc).isoformat(),
         },
     )
+
+    print(f"Requested retrieval for {vehicle_id} at {moment.isoformat()}")
 
 
 @dataclass
@@ -78,6 +84,9 @@ def download_images():
         db_downloaded.put_dict(retrieval_id, asdict(results))
         print(f"Retrieval {retrieval_id} downloaded")
 
+    else:
+        print("No retrievals to poll for")
+
 
 db_analyzed = get_database("ppe/analyzed")
 
@@ -94,6 +103,10 @@ def analyze_images():
 
         db_downloaded.delete(retrieval_id)
         db_analyzed.put_dict(retrieval_id, asdict(results))
+        print(f"Analyzed {retrieval_id} with result {results.detection}")
+
+    else:
+        print("No pending images to analyze")
 
 
 db_notified = get_database("ppe/notified")
@@ -128,3 +141,10 @@ def notify_about_offenders(to_email: str):
 
         db_analyzed.delete(retrieval_id)
         db_notified.put_dict(retrieval_id, asdict(result))
+
+        print(
+            f"Notified about offending {retrieval_id} image with result {result.detection}"
+        )
+
+    else:
+        print("No offending images to notify about")
