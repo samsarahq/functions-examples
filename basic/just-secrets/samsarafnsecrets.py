@@ -1,6 +1,7 @@
 import os
 import boto3
 import json
+from typing import Callable
 
 
 _credentials: None | dict[str, str] = None
@@ -51,3 +52,18 @@ def get_secrets(
 
     _secrets = json.loads(res) if res != "null" else {}
     return _secrets
+
+
+def apply_to_env(secrets: dict[str, str]) -> Callable[[], None]:
+    """
+    Apply the secrets to the environment.
+    Returns a cleanup function to restore the original environment.
+    """
+    env_before = os.environ.copy()
+    os.environ.update(secrets)
+
+    def cleanup():
+        os.environ.clear()
+        os.environ.update(env_before)
+
+    return cleanup
