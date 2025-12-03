@@ -1,0 +1,8 @@
+{
+  "$schema": "https://raw.githubusercontent.com/samsarahq/functions-examples/refs/heads/main/.schemas/importMetadata.schema.json",
+  "name": "moving-legacy-scripts-to-functions",
+  "description": "Shows how to make migration from legacy scripts to Functions as seamless as possible.",
+  "eventParameters": {},
+  "secretsKeys": ["SAMSARA_API_KEY"],
+  "handler": "legacy_script.function_entrypoint"
+}
