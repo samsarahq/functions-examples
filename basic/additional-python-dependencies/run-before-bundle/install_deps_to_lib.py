@@ -1,432 +1,190 @@
 import shutil
 import subprocess
 import sys
-import json
-import urllib.request
-import urllib.error
-import tempfile
-import os
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+
 
 prod_python_version = "3.12"
-
-
-def load_supported_tags(tags_file: str = "supported-prod-tags.json") -> List[str]:
-    """Load supported platform tags from JSON file."""
-    tags_path = Path(__file__).parent / tags_file
-    try:
-        with open(tags_path, "r") as f:
-            tags = json.load(f)
-        print(f"Loaded {len(tags)} supported platform tags")
-        return tags
-    except FileNotFoundError:
-        print(f"Error: Could not find {tags_path}")
-        sys.exit(1)
-    except json.JSONDecodeError as e:
-        print(f"Error: Invalid JSON in {tags_path}: {e}")
-        sys.exit(1)
-
-
-def resolve_all_dependencies(requirements_file: str) -> List[str]:
-    """Resolve all dependencies including transitive ones using pip."""
-    print("Resolving all dependencies (including transitive)...")
-
-    # Create a temporary directory for the resolution
-    with tempfile.TemporaryDirectory() as temp_dir:
-        try:
-            # Use pip-tools to resolve dependencies if available, otherwise use pip
-            try:
-                # Try pip-compile first (from pip-tools)
-                resolved_file = os.path.join(temp_dir, "resolved.txt")
-                cmd = [
-                    "pip-compile",
-                    "--quiet",
-                    "--output-file",
-                    resolved_file,
-                    requirements_file,
-                ]
-                subprocess.run(cmd, capture_output=True, text=True, check=True)
-
-                with open(resolved_file, "r") as f:
-                    lines = f.readlines()
-
-            except (subprocess.CalledProcessError, FileNotFoundError):
-                # Fallback to pip install --dry-run if pip-compile is not available
-                print("pip-compile not found, using pip install --dry-run...")
-                cmd = [
-                    "pip",
-                    "install",
-                    "--dry-run",
-                    "--quiet",
-                    "--report",
-                    os.path.join(temp_dir, "report.json"),
-                    "-r",
-                    requirements_file,
-                ]
-                subprocess.run(cmd, capture_output=True, text=True, check=True)
-
-                # Parse the JSON report
-                with open(os.path.join(temp_dir, "report.json"), "r") as f:
-                    report = json.load(f)
-
-                lines = []
-                for item in report.get("install", []):
-                    metadata = item.get("metadata", {})
-                    name = metadata.get("name", "")
-                    version = metadata.get("version", "")
-                    if name and version:
-                        lines.append(f"{name}=={version}\n")
-
-            # Parse the resolved dependencies
-            packages = []
-            for line in lines:
-                line = line.strip()
-                if line and not line.startswith("#") and not line.startswith("-"):
-                    # Extract package name (handle both == and other operators)
-                    if "==" in line:
-                        package_name = line.split("==")[0].strip()
-                    elif ">=" in line:
-                        package_name = line.split(">=")[0].strip()
-                    elif "<=" in line:
-                        package_name = line.split("<=")[0].strip()
-                    elif ">" in line:
-                        package_name = line.split(">")[0].strip()
-                    elif "<" in line:
-                        package_name = line.split("<")[0].strip()
-                    else:
-                        package_name = line.strip()
-
-                    if package_name:
-                        packages.append(package_name)
-
-            print(f"Resolved {len(packages)} total dependencies (including transitive)")
-            return packages
-
-        except subprocess.CalledProcessError as e:
-            print(f"Error resolving dependencies: {e}")
-            print(f"Command output: {e.stdout}")
-            print(f"Command error: {e.stderr}")
-            # Fallback to just the direct dependencies
-            print("Falling back to direct dependencies only...")
-            packages = []
-            with open(requirements_file, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith("#"):
-                        packages.append(line)
-            return packages
-
-
-def parse_package_spec(package_spec: str) -> Tuple[str, Optional[str]]:
-    """Parse package specification into name and version constraint."""
-    if ">=" in package_spec:
-        name, version = package_spec.split(">=", 1)
-        return name.strip(), f">={version.strip()}"
-    elif "==" in package_spec:
-        name, version = package_spec.split("==", 1)
-        return name.strip(), f"=={version.strip()}"
-    elif ">" in package_spec:
-        name, version = package_spec.split(">", 1)
-        return name.strip(), f">{version.strip()}"
-    else:
-        return package_spec.strip(), None
-
-
-def get_package_info(package_name: str) -> Optional[Dict[str, Any]]:
-    """Fetch package information from PyPI JSON API."""
-    url = f"https://pypi.org/pypi/{package_name}/json"
-    try:
-        print(f"Fetching package info for {package_name}...")
-        with urllib.request.urlopen(url) as response:
-            return json.loads(response.read().decode())
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            print(f"Package '{package_name}' not found on PyPI")
-        else:
-            print(f"HTTP error {e.code} while fetching {package_name}: {e.reason}")
-        return None
-    except Exception as e:
-        print(f"Error fetching package info for {package_name}: {e}")
-        return None
-
-
-def extract_platform_tags_from_filename(filename: str) -> List[str]:
-    """Extract platform tags from wheel filename."""
-    # Wheel filename format: {name}-{version}-{python tag}-{abi tag}-{platform tag}.whl
-    if not filename.endswith(".whl"):
-        return []
-
-    parts = filename[:-4].split("-")  # Remove .whl extension
-    if len(parts) < 5:
-        return []
-
-    # For packages with underscores or complex names, we need to find where the version ends
-    # and the python tag begins. We'll work backwards from the end.
-    python_tag = parts[-3]
-    abi_tag = parts[-2]
-    platform_part = parts[-1]
-
-    # Handle complex platform tags that might have dots (like manylinux_2_17_x86_64.manylinux2014_x86_64)
-    # Split by dots and create tags for each part
-    platform_variants = platform_part.split(".")
-
-    tags = []
-    for platform in platform_variants:
-        full_tag = f"{python_tag}-{abi_tag}-{platform}"
-        tags.append(full_tag)
-
-    # Also add the full complex tag as-is
-    if len(platform_variants) > 1:
-        full_complex_tag = f"{python_tag}-{abi_tag}-{platform_part}"
-        tags.append(full_complex_tag)
-
-    return tags
-
-
-def check_compatibility(package_spec: str, supported_tags: List[str]) -> Dict[str, Any]:
-    """
-    Check if a package has compatible wheels for any supported platform tags.
-
-    Args:
-        package_spec: Package specification (e.g., "pydantic>=2.0.0")
-        supported_tags: List of supported platform tags
-
-    Returns:
-        Dictionary with compatibility results
-    """
-    package_name, _ = parse_package_spec(package_spec)
-
-    package_info = get_package_info(package_name)
-    if not package_info:
-        return {
-            "package": package_spec,
-            "compatible": False,
-            "error": "Package not found or could not fetch info",
-            "compatible_tags": [],
-            "versions_checked": [],
-        }
-
-    compatible_tags = []
-    versions_checked = []
-
-    # Check only the latest version
-    latest_version = package_info.get("info", {}).get("version")
-    if not latest_version:
-        return {
-            "package": package_spec,
-            "compatible": False,
-            "error": "Could not determine latest version",
-            "compatible_tags": [],
-            "versions_checked": [],
-        }
-    releases = package_info.get("releases", {})
-    versions_to_check = [latest_version] if latest_version in releases else []
-
-    print(f"Checking {len(versions_to_check)} version(s) for {package_name}...")
-
-    for version in versions_to_check:
-        versions_checked.append(version)
-        files = releases.get(version, [])
-
-        print(f"  Version {version}: {len(files)} files")
-
-        for file_info in files:
-            filename = file_info.get("filename", "")
-            if not filename.endswith(".whl"):
-                continue
-
-            file_tags = extract_platform_tags_from_filename(filename)
-
-            for tag in file_tags:
-                if tag in supported_tags:
-                    compatible_tags.append(
-                        {"version": version, "tag": tag, "filename": filename}
-                    )
-                    print(f"    ✓ Compatible: {filename} (tag: {tag})")
-
-    return {
-        "package": package_spec,
-        "compatible": len(compatible_tags) > 0,
-        "compatible_tags": compatible_tags,
-        "versions_checked": versions_checked,
-        "total_supported_tags": len(supported_tags),
-    }
-
-
-def find_best_platform_tag(
-    compatible_tags: List[Dict[str, Any]], supported_tags: List[str]
-) -> Optional[str]:
-    """Find the best platform tag to use for pip install."""
-    if not compatible_tags:
-        return None
-
-    # Prefer more specific tags over generic ones
-    tag_priority = {
-        "manylinux2014": 100,
-        "manylinux_2_17": 90,
-        "manylinux_2_28": 80,
-        "manylinux1": 70,
-        "linux": 60,
-        "any": 10,
-    }
-
-    best_tag = None
-    best_score = -1
-
-    for combo in compatible_tags:
-        tag = combo["tag"]
-        score = 0
-
-        # Score based on tag content
-        for keyword, points in tag_priority.items():
-            if keyword in tag:
-                score += points
-                break
-
-        # Prefer tags that appear earlier in supported_tags (higher priority)
-        try:
-            tag_index = supported_tags.index(tag)
-            score += (len(supported_tags) - tag_index) / len(supported_tags) * 50
-        except ValueError:
-            pass
-
-        if score > best_score:
-            best_score = score
-            best_tag = tag
-
-    return best_tag
-
-
-def determine_best_platform_tag(requirements_file: str) -> str:
-    """
-    Determine the best platform tag for production by analyzing all dependencies.
-    Returns the most restrictive platform tag needed by any dependency.
-    """
-    print("Analyzing dependencies to determine best platform tag...")
-
-    # Load supported tags
-    supported_tags = load_supported_tags("supported-prod-tags.json")
-
-    # Resolve all dependencies
-    packages = resolve_all_dependencies(requirements_file)
-
-    # Check compatibility for all packages
-    platform_specific_tags = []
-    for package in packages:
-        result = check_compatibility(package, supported_tags)
-        if result["compatible"] and result["compatible_tags"]:
-            best_tag = find_best_platform_tag(result["compatible_tags"], supported_tags)
-            if best_tag and best_tag != "py3-none-any":
-                # Extract just the platform part (e.g., "manylinux2014_x86_64" from "cp312-cp312-manylinux2014_x86_64")
-                parts = best_tag.split("-")
-                if len(parts) >= 3:
-                    platform_part = parts[-1]
-                    platform_specific_tags.append(platform_part)
-
-    # If we found platform-specific tags, use the most restrictive one
-    if platform_specific_tags:
-        # Prefer manylinux2014 over other variants as it's more compatible
-        for tag in platform_specific_tags:
-            if "manylinux2014_x86_64" in tag:
-                print(f"Selected platform tag: {tag}")
-                return tag
-
-        # Otherwise, use the first platform-specific tag found
-        selected_tag = platform_specific_tags[0]
-        print(f"Selected platform tag: {selected_tag}")
-        return selected_tag
-
-    return "py3-none-any"
+suggested_platform = "manylinux2014_x86_64"
 
 
 def install_pip_tools():
-    """Install pip-tools if not already installed."""
-    try:
-        subprocess.run(["pip-compile", "--version"], check=True, capture_output=True)
-        print("pip-tools already installed")
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        print("Installing pip-tools...")
-        subprocess.run(["pip", "install", "pip-tools"], check=True)
+    """
+    Install pip-tools with a compatible pip version for dependency compilation.
+
+    WORKAROUND FOR PIP 25.x INCOMPATIBILITY:
+    =========================================
+
+    As of January 2025, there's a compatibility issue between pip-tools and pip 25.x:
+    - pip 25.0+ removed the internal `InstallRequirement.use_pep517` attribute
+    - pip-tools 7.5.1 (and earlier) depends on this attribute, causing AttributeError
+    - pip-tools 8.x (which will fix this) is not yet released
+
+    This function implements a temporary workaround:
+    1. Detect the current pip version
+    2. If pip 25.x is installed, temporarily downgrade to pip 24.3.1
+    3. Install pip-tools (which works fine with pip 24.x)
+    4. The calling function will restore pip 25.x after pip-compile completes
+
+    This ensures pip-compile can successfully resolve platform-specific dependencies
+    (like pydantic_core) which is critical for production Lambda deployments.
+
+    Once pip-tools 8.x is released with pip 25.x compatibility, this workaround
+    can be removed and replaced with: pip install --upgrade pip-tools>=8.0.0
+
+    Returns:
+        str: The original pip version string (e.g., "pip 25.3 from ...")
+    """
+    print("Installing pip-tools with compatible pip version...")
+
+    # Save current pip version
+    pip_version_result = subprocess.run(
+        ["pip", "--version"], capture_output=True, text=True, check=True
+    )
+    current_pip = pip_version_result.stdout.strip()
+    print(f"Current pip: {current_pip}")
+
+    # Temporarily use pip 24.3.1 for compilation (last stable before 25.x)
+    print("Temporarily using pip 24.3.1 for pip-tools compatibility...")
+    subprocess.run(["pip", "install", "pip==24.3.1"], check=True, capture_output=True)
+
+    # Now install pip-tools (7.5.1 works fine with pip 24.x)
+    subprocess.run(["pip", "install", "pip-tools"], check=True)
+
+    return current_pip
 
 
 def install_dependencies_to_path_prod(
-    dependency_path: str, requirements_file: str, platform: str, python_version: str
-) -> subprocess.CompletedProcess:
+    dependency_path: str, requirements_file: str, python_version: str
+) -> tuple[subprocess.CompletedProcess, str]:
     """
     Install dependencies using pip-tools for production with platform targeting.
+
+    This function performs several critical steps in sequence:
+    1. Temporarily downgrades pip if needed for pip-tools compatibility
+    2. Uses pip-compile to resolve the complete dependency tree with versions
+    3. Determines the appropriate platform tag AFTER compilation
+    4. Restores pip to original version
+    5. Installs all dependencies with platform-specific wheels
+
+    Platform Detection Timing:
+        Platform detection MUST happen after pip-compile because:
+        - The original requirements.txt may only list top-level packages (e.g., "pydantic")
+        - Platform-specific dependencies are often transitive (e.g., pydantic_core)
+        - Only the compiled requirements file contains the full resolved dependency tree
+        - Without full resolution, we can't detect if platform-specific binaries are needed
+
+    Example: If requirements.txt has "pydantic", we need pip-compile to discover that
+    it depends on "pydantic_core", which requires platform-specific compiled wheels.
+
+    Fallback Behavior:
+        If pip-compile fails, falls back to direct pip installation without
+        pre-compilation, but platform detection will be less accurate.
+
+    Returns:
+        tuple: (CompletedProcess result, platform tag used for installation)
     """
     dep_path = Path(dependency_path)
     if dep_path.exists():
         shutil.rmtree(dep_path)
 
-    # Install pip-tools first
-    install_pip_tools()
+    # Install pip-tools first (this may temporarily downgrade pip for compatibility)
+    original_pip = install_pip_tools()
 
-    # Generate compiled requirements
+    # Generate compiled requirements with pip-compile to resolve ALL dependencies
+    # This is essential for accurate platform detection
     compiled_requirements = Path(requirements_file).with_suffix(".compiled.txt")
     print(f"Compiling requirements to {compiled_requirements}...")
 
-    subprocess.run(
-        [
-            "pip-compile",
-            requirements_file,
-            "--output-file",
-            str(compiled_requirements),
-            "--verbose",
-        ],
-        check=True,
-    )
+    try:
+        subprocess.run(
+            [
+                "pip-compile",
+                requirements_file,
+                "--output-file",
+                str(compiled_requirements),
+                "--verbose",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        use_compiled = True
+        print("Successfully compiled requirements with pip-compile")
+    except subprocess.CalledProcessError as e:
+        print(f"Warning: pip-compile failed: {e.stderr}")
+        print("Falling back to direct pip installation without pre-compilation...")
+        use_compiled = False
+
+    print(f"Installing packages with suggested platform tag: {suggested_platform}")
+
+    # Restore pip to original version if we downgraded it for pip-tools compatibility
+    # Only restore after successful compilation to ensure pip-compile ran with compatible pip
+    if use_compiled and "pip 25" in original_pip:
+        print("Restoring original pip version...")
+        # Upgrade back to latest pip (25.x)
+        subprocess.run(
+            ["pip", "install", "--upgrade", "pip"], check=True, capture_output=True
+        )
 
     # Install with platform targeting
     print(
-        f"Installing dependencies for platform {platform} (Python {python_version})..."
-    )
-    result = subprocess.run(
-        [
-            "pip",
-            "install",
-            "-r",
-            str(compiled_requirements),
-            "--target",
-            dependency_path,
-            "--platform",
-            platform,
-            "--python-version",
-            python_version,
-            "--only-binary=:all:",
-            "--no-deps",  # Don't install dependencies of dependencies since we already resolved them
-        ],
-        check=True,
+        f"Installing dependencies for platform {suggested_platform} (Python {python_version})..."
     )
 
-    # Clean up compiled requirements
-    compiled_requirements.unlink()
+    install_args = [
+        "pip",
+        "install",
+        "-r",
+        str(compiled_requirements) if use_compiled else requirements_file,
+        "--target",
+        dependency_path,
+        "--platform",
+        suggested_platform,
+        "--python-version",
+        python_version,
+        "--only-binary=:all:",
+    ]
 
-    return result
+    # Only add --no-deps if we pre-compiled (already resolved dependencies)
+    if use_compiled:
+        install_args.append("--no-deps")
+
+    result = subprocess.run(install_args, check=True)
+
+    # Clean up compiled requirements if it was created
+    if use_compiled and compiled_requirements.exists():
+        compiled_requirements.unlink()
+
+    return result, suggested_platform
 
 
 def install_dependencies_to_path(
     dependency_path: str, requirements_file: str, platform: str | None = None
-) -> subprocess.CompletedProcess:
+) -> tuple[subprocess.CompletedProcess, str | None]:
     """
     Install dependencies to the given path with pip using --target flag.
     Remove all files in the given path before installation.
+
+    Returns:
+        tuple: (CompletedProcess result, platform tag used or None for local)
     """
     dep_path = Path(dependency_path)
     if dep_path.exists():
         shutil.rmtree(dep_path)
 
     if platform:
+        # Production install - determines platform automatically
         return install_dependencies_to_path_prod(
-            dependency_path, requirements_file, platform, prod_python_version
+            dependency_path, requirements_file, prod_python_version
         )
     else:
         # Local development - simple installation
-        return subprocess.run(
+        result = subprocess.run(
             ["pip", "install", "-r", requirements_file, "--target", dependency_path],
             check=True,
         )
+        return result, None
 
 
 def clean_up_depedency_path(dependency_path: str, print_warnings: bool = True):
@@ -498,18 +256,17 @@ def main():
     is_prod_install = len(sys.argv) > 1 and sys.argv[1] == "prod"
 
     if is_prod_install:
-        # Dynamically determine the best platform tag
-        prod_platform = determine_best_platform_tag(str(requirements_file))
-        print(f"Installing dependencies for production (platform: {prod_platform})...")
-        install_dependencies_to_path(
-            str(lib_dir), str(requirements_file), prod_platform
+        # Install for production - platform tag will be determined after compilation
+        print("Installing dependencies for production...")
+        _, prod_platform = install_dependencies_to_path(
+            str(lib_dir), str(requirements_file), "prod"
         )
         print(
             f"Prod dependencies installed to {lib_dir} with platform tag {prod_platform}"
         )
     else:
         install_dependencies_to_path(str(lib_dir), str(requirements_file))
-        print("Local development dependencies installed to {lib_dir}")
+        print(f"Local development dependencies installed to {lib_dir}")
 
     clean_up_depedency_path(str(lib_dir), print_warnings=not is_prod_install)
 
