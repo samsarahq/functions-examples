@@ -8,160 +8,73 @@ prod_python_version = "3.12"
 suggested_platform = "manylinux2014_x86_64"
 
 
-def install_pip_tools():
-    """
-    Install pip-tools with a compatible pip version for dependency compilation.
-
-    WORKAROUND FOR PIP 25.x INCOMPATIBILITY:
-    =========================================
-
-    As of January 2025, there's a compatibility issue between pip-tools and pip 25.x:
-    - pip 25.0+ removed the internal `InstallRequirement.use_pep517` attribute
-    - pip-tools 7.5.1 (and earlier) depends on this attribute, causing AttributeError
-    - pip-tools 8.x (which will fix this) is not yet released
-
-    This function implements a temporary workaround:
-    1. Detect the current pip version
-    2. If pip 25.x is installed, temporarily downgrade to pip 24.3.1
-    3. Install pip-tools (which works fine with pip 24.x)
-    4. The calling function will restore pip 25.x after pip-compile completes
-
-    This ensures pip-compile can successfully resolve platform-specific dependencies
-    (like pydantic_core) which is critical for production Lambda deployments.
-
-    Once pip-tools 8.x is released with pip 25.x compatibility, this workaround
-    can be removed and replaced with: pip install --upgrade pip-tools>=8.0.0
-
-    Returns:
-        str: The original pip version string (e.g., "pip 25.3 from ...")
-    """
-    print("Installing pip-tools with compatible pip version...")
-
-    # Save current pip version
-    pip_version_result = subprocess.run(
-        ["pip", "--version"], capture_output=True, text=True, check=True
-    )
-    current_pip = pip_version_result.stdout.strip()
-    print(f"Current pip: {current_pip}")
-
-    # Temporarily use pip 24.3.1 for compilation (last stable before 25.x)
-    print("Temporarily using pip 24.3.1 for pip-tools compatibility...")
-    subprocess.run(["pip", "install", "pip==24.3.1"], check=True, capture_output=True)
-
-    # Now install pip-tools (7.5.1 works fine with pip 24.x)
-    subprocess.run(["pip", "install", "pip-tools"], check=True)
-
-    return current_pip
-
-
 def install_dependencies_to_path_prod(
-    dependency_path: str, requirements_file: str, python_version: str
-) -> tuple[subprocess.CompletedProcess, str]:
+    dependency_path: str, requirements_file: str
+) -> subprocess.CompletedProcess:
     """
     Install dependencies using pip-tools for production with platform targeting.
 
-    This function performs several critical steps in sequence:
-    1. Temporarily downgrades pip if needed for pip-tools compatibility
+    This function performs the following steps:
+    1. Installs pip-tools
     2. Uses pip-compile to resolve the complete dependency tree with versions
-    3. Determines the appropriate platform tag AFTER compilation
-    4. Restores pip to original version
-    5. Installs all dependencies with platform-specific wheels
-
-    Platform Detection Timing:
-        Platform detection MUST happen after pip-compile because:
-        - The original requirements.txt may only list top-level packages (e.g., "pydantic")
-        - Platform-specific dependencies are often transitive (e.g., pydantic_core)
-        - Only the compiled requirements file contains the full resolved dependency tree
-        - Without full resolution, we can't detect if platform-specific binaries are needed
-
-    Example: If requirements.txt has "pydantic", we need pip-compile to discover that
-    it depends on "pydantic_core", which requires platform-specific compiled wheels.
-
-    Fallback Behavior:
-        If pip-compile fails, falls back to direct pip installation without
-        pre-compilation, but platform detection will be less accurate.
+    2. Determines the appropriate platform tag AFTER compilation
+    3. Installs all dependencies with platform-specific wheels
 
     Returns:
-        tuple: (CompletedProcess result, platform tag used for installation)
+        CompletedProcess result
     """
     dep_path = Path(dependency_path)
     if dep_path.exists():
         shutil.rmtree(dep_path)
 
-    # Install pip-tools first (this may temporarily downgrade pip for compatibility)
-    original_pip = install_pip_tools()
+    # Install pip-tools
+    subprocess.run(["pip", "install", "pip-tools"], check=True)
 
     # Generate compiled requirements with pip-compile to resolve ALL dependencies
     # This is essential for accurate platform detection
     compiled_requirements = Path(requirements_file).with_suffix(".compiled.txt")
     print(f"Compiling requirements to {compiled_requirements}...")
 
-    try:
-        subprocess.run(
-            [
-                "pip-compile",
-                requirements_file,
-                "--output-file",
-                str(compiled_requirements),
-                "--verbose",
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        use_compiled = True
-        print("Successfully compiled requirements with pip-compile")
-    except subprocess.CalledProcessError as e:
-        print(f"Warning: pip-compile failed: {e.stderr}")
-        print("Falling back to direct pip installation without pre-compilation...")
-        use_compiled = False
-
-    print(f"Installing packages with suggested platform tag: {suggested_platform}")
-
-    # Restore pip to original version if we downgraded it for pip-tools compatibility
-    # Only restore after successful compilation to ensure pip-compile ran with compatible pip
-    if use_compiled and "pip 25" in original_pip:
-        print("Restoring original pip version...")
-        # Upgrade back to latest pip (25.x)
-        subprocess.run(
-            ["pip", "install", "--upgrade", "pip"], check=True, capture_output=True
-        )
-
-    # Install with platform targeting
-    print(
-        f"Installing dependencies for platform {suggested_platform} (Python {python_version})..."
+    subprocess.run(
+        [
+            "pip-compile",
+            requirements_file,
+            "--output-file",
+            str(compiled_requirements),
+            "--verbose",
+        ],
+        check=True,
     )
 
-    install_args = [
-        "pip",
-        "install",
-        "-r",
-        str(compiled_requirements) if use_compiled else requirements_file,
-        "--target",
-        dependency_path,
-        "--platform",
-        suggested_platform,
-        "--python-version",
-        python_version,
-        "--only-binary=:all:",
-    ]
+    # Install with platform targeting
+    print(f"Installing dependencies for platform {suggested_platform}...")
 
-    # Only add --no-deps if we pre-compiled (already resolved dependencies)
-    if use_compiled:
-        install_args.append("--no-deps")
+    result = subprocess.run(
+        [
+            "pip",
+            "install",
+            "-r",
+            str(compiled_requirements),
+            "--target",
+            dependency_path,
+            "--platform",
+            suggested_platform,
+            "--python-version",
+            prod_python_version,
+            "--only-binary=:all:",
+            "--no-deps",
+        ],
+        check=True,
+    )
 
-    result = subprocess.run(install_args, check=True)
+    compiled_requirements.unlink()
 
-    # Clean up compiled requirements if it was created
-    if use_compiled and compiled_requirements.exists():
-        compiled_requirements.unlink()
-
-    return result, suggested_platform
+    return result
 
 
 def install_dependencies_to_path(
-    dependency_path: str, requirements_file: str, platform: str | None = None
-) -> tuple[subprocess.CompletedProcess, str | None]:
+    dependency_path: str, requirements_file: str, is_prod_install: bool
+) -> subprocess.CompletedProcess:
     """
     Install dependencies to the given path with pip using --target flag.
     Remove all files in the given path before installation.
@@ -173,18 +86,16 @@ def install_dependencies_to_path(
     if dep_path.exists():
         shutil.rmtree(dep_path)
 
-    if platform:
+    if is_prod_install:
         # Production install - determines platform automatically
-        return install_dependencies_to_path_prod(
-            dependency_path, requirements_file, prod_python_version
-        )
+        return install_dependencies_to_path_prod(dependency_path, requirements_file)
     else:
         # Local development - simple installation
         result = subprocess.run(
             ["pip", "install", "-r", requirements_file, "--target", dependency_path],
             check=True,
         )
-        return result, None
+        return result
 
 
 def clean_up_depedency_path(dependency_path: str, print_warnings: bool = True):
@@ -256,16 +167,13 @@ def main():
     is_prod_install = len(sys.argv) > 1 and sys.argv[1] == "prod"
 
     if is_prod_install:
-        # Install for production - platform tag will be determined after compilation
         print("Installing dependencies for production...")
-        _, prod_platform = install_dependencies_to_path(
-            str(lib_dir), str(requirements_file), "prod"
-        )
+        _ = install_dependencies_to_path(str(lib_dir), str(requirements_file), True)
         print(
-            f"Prod dependencies installed to {lib_dir} with platform tag {prod_platform}"
+            f"Prod dependencies installed to {lib_dir} with platform tag {suggested_platform}"
         )
     else:
-        install_dependencies_to_path(str(lib_dir), str(requirements_file))
+        install_dependencies_to_path(str(lib_dir), str(requirements_file), False)
         print(f"Local development dependencies installed to {lib_dir}")
 
     clean_up_depedency_path(str(lib_dir), print_warnings=not is_prod_install)
