@@ -1,6 +1,8 @@
 import base64
+import datetime
 import json
 import os
+
 import boto3
 import botocore.exceptions
 
@@ -11,9 +13,18 @@ class Storage:
     Can be used to store files, images, etc.
     """
 
-    def __init__(self, credentials: dict[str, str]):
+    def __init__(self):
+        credentials = get_credentials()
+        self._credentials = credentials
         self.client = boto3.client("s3", **credentials)
         self.bucket = os.environ["SamsaraFunctionStorageName"]
+
+    def _get_client(self):
+        credentials = get_credentials()
+        if credentials != self._credentials:
+            self._credentials = credentials
+            self.client = boto3.client("s3", **credentials)
+        return self.client
 
     def put(self, Key: str, Body: bytes, **kwargs):
         """
@@ -21,7 +32,7 @@ class Storage:
         Kwargs are passed to the underlying boto3.client('s3').put_object().
         Returns the original boto3 response.
         """
-        return self.client.put_object(
+        return self._get_client().put_object(
             Bucket=self.bucket,
             Key=Key,
             Body=Body,
@@ -43,7 +54,7 @@ class Storage:
         Kwargs are passed to the underlying `boto3.client('s3').get_object()`.
         Returns the original boto3 response.
         """
-        return self.client.get_object(
+        return self._get_client().get_object(
             Bucket=self.bucket,
             Key=Key,
             **kwargs,
@@ -72,7 +83,7 @@ class Storage:
         Kwargs are passed to the underlying `boto3.client('s3').delete_object()`.
         Returns the original boto3 response.
         """
-        return self.client.delete_object(
+        return self._get_client().delete_object(
             Bucket=self.bucket,
             Key=Key,
             **kwargs,
@@ -88,7 +99,7 @@ class Storage:
         Kwargs are passed to the underlying `boto3.client('s3').list_objects_v2()`.
         Returns the original boto3 response.
         """
-        return self.client.list_objects_v2(
+        return self._get_client().list_objects_v2(
             Bucket=self.bucket,
             Prefix=Prefix,
             **kwargs,
@@ -182,11 +193,32 @@ class Database:
 
 
 _credentials: None | dict[str, str] = None
+_credentials_expiration: datetime.datetime | None = None
+_CREDENTIAL_REFRESH_MARGIN = datetime.timedelta(minutes=20)
 
 
-def get_credentials(force_refresh=False) -> dict[str, str]:
-    global _credentials
-    if _credentials is not None and not force_refresh:
+def _normalize_expiration(
+    value: str | datetime.datetime,
+) -> datetime.datetime:
+    """Return an expiration timestamp as a timezone-aware UTC datetime."""
+    if isinstance(value, str):
+        value = datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=datetime.timezone.utc)
+    return value.astimezone(datetime.timezone.utc)
+
+
+def get_credentials(force_refresh: bool = False) -> dict[str, str]:
+    global _credentials, _credentials_expiration
+    refresh_deadline = (
+        datetime.datetime.now(datetime.timezone.utc) + _CREDENTIAL_REFRESH_MARGIN
+    )
+    cache_is_valid = (
+        _credentials is not None
+        and _credentials_expiration is not None
+        and refresh_deadline < _credentials_expiration
+    )
+    if cache_is_valid and not force_refresh:
         return _credentials
 
     sts = boto3.client("sts")
@@ -194,11 +226,13 @@ def get_credentials(force_refresh=False) -> dict[str, str]:
         RoleArn=os.environ["SamsaraFunctionExecRoleArn"],
         RoleSessionName=os.environ["SamsaraFunctionName"],
     )
+    credentials = res["Credentials"]
     _credentials = {
-        "aws_access_key_id": res["Credentials"]["AccessKeyId"],
-        "aws_secret_access_key": res["Credentials"]["SecretAccessKey"],
-        "aws_session_token": res["Credentials"]["SessionToken"],
+        "aws_access_key_id": credentials["AccessKeyId"],
+        "aws_secret_access_key": credentials["SecretAccessKey"],
+        "aws_session_token": credentials["SessionToken"],
     }
+    _credentials_expiration = _normalize_expiration(credentials["Expiration"])
     return _credentials
 
 
@@ -210,7 +244,7 @@ def get_storage() -> Storage:
     if _storage is not None:
         return _storage
 
-    _storage = Storage(get_credentials())
+    _storage = Storage()
     return _storage
 
 
